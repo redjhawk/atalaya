@@ -216,10 +216,15 @@ serde_json = "1"
 ```
 
 **Autenticación**
-- `Authorization: Bearer <token-por-dispositivo>` en cada petición del agente.
-- **Cloudflare Access** por delante (service token) como segunda capa.
-- **La interfaz web va tras login** (Cloudflare Access o auth propia): la ubicación en vivo no puede
-  quedar expuesta a quien dé con el hostname.
+Decidido en `docs/adr/0003-device-mtls-behind-cloudflare.md`:
+- **mTLS en el edge de Cloudflare** para el device: el locator presenta un certificado de cliente
+  (clave no exportable en Android Keystore) y Cloudflare bloquea todo lo que no lo traiga.
+- **Identidad por huella:** Cloudflare reenvía la huella SHA-256 del certificado y el servidor la
+  compara con la registrada para ese `{device}`. Sustituye al Bearer y al service token de Access.
+- **Alta manual al desplegar** (un solo device por ahora): CSR generado en el móvil, firmado con la
+  CA de cliente de Cloudflare y huella registrada en el servidor.
+- **La interfaz web va en otro hostname, tras login** (Cloudflare Access o auth propia): la
+  ubicación en vivo no puede quedar expuesta a quien dé con el hostname.
 
 **"Última vez visto" y retención**
 - El servidor guarda `últimoContacto` por dispositivo; la UI muestra **hace cuánto** se supo de él y
@@ -352,6 +357,29 @@ la niña pueda enviar un **SOS / "estoy aquí"** con una pulsación, sin abrir n
 
 ## 3. Despliegue (paso a paso)
 
+### Prerrequisitos (comprobar antes de lanzar el proyecto)
+
+La autenticación por mTLS (`docs/adr/0003-device-mtls-behind-cloudflare.md`) depende de dos cosas
+que hay que verificar con una prueba real antes de empezar a implementar:
+
+- [ ] **Cloudflare: CA de cliente y reenvío de la huella en el plan actual.**
+  1. *SSL/TLS → Client Certificates*: se puede crear un certificado y activar mTLS en el hostname.
+  2. *Rules → Transform Rules*: una regla añade la cabecera `X-Client-Cert-Sha256` con
+     `cf.tls_client_auth.cert_fingerprint_sha256`.
+  3. *WAF → Custom rules*: bloquear si `not cf.tls_client_auth.cert_verified or
+     cf.tls_client_auth.cert_revoked`.
+  4. Prueba: con `nc -l -p 8080` tras el túnel, `curl` sin certificado da 403 y `curl --cert/--key`
+     llega al origen con la cabecera; su valor coincide con
+     `openssl x509 -noout -fingerprint -sha256`. Tras revocar el certificado, vuelve a dar 403.
+- [ ] **XCover 5: Keystore respaldado por hardware con Knox quemado.**
+  1. `adb shell pm list features | grep -i keystore` muestra `android.hardware.hardware_keystore`.
+  2. Una app de prueba genera una clave EC en `AndroidKeyStore` y `KeyInfo.securityLevel` devuelve
+     `TRUSTED_ENVIRONMENT` o `STRONGBOX` (no `SOFTWARE`).
+  3. Una firma de prueba con esa clave funciona.
+
+Si falla la primera, hay que replantear el ADR 0003. Si falla la segunda, el mTLS sigue siendo
+viable, pero root podría copiar la clave y hay que anotarlo en el ADR.
+
 ### Servidor (T310)
 1. Compilar el binario Rust estático:
    `cargo build --release --target x86_64-unknown-linux-musl`.
@@ -360,15 +388,17 @@ la niña pueda enviar un **SOS / "estoy aquí"** con una pulsación, sin abrir n
    Recomendado: unidad **systemd** para que arranque solo y se reinicie si cae.
 3. Instalar y configurar **cloudflared**: túnel desde `https://<host>.<dominio>` →
    `http://localhost:8080`. Sin abrir puertos en el router.
-4. (Opcional) Activar **Cloudflare Access** con service token para el hostname.
+4. Activar **mTLS** en el hostname de la API (regla WAF que bloquea sin certificado válido) y poner
+   el hostname del panel tras **Cloudflare Access**.
 
 ### Móvil
 1. Compilar la **APK Locator** (Android Studio / Gradle) e instalarla.
 2. Conceder permisos con root (ver §2.1) y exonerar de batería.
-3. Instalar el **módulo Magisk del agente** (`service.sh` + script + `curl` estático +
-   configuración: hostname, token).
-4. (Producción) **Systemizar** la APK Locator y el agente para que no se puedan quitar.
-5. Reiniciar y verificar que el agente envía telemetría y ubicación al servidor.
+3. **Alta del certificado** (por `adb`): la app genera la clave y el CSR, se firma con la CA de
+   cliente de Cloudflare, se devuelve el certificado a la app y se registra su huella en el servidor.
+4. Instalar el **módulo Magisk del agente** (`service.sh` + script + configuración).
+5. (Producción) **Systemizar** la APK Locator y el agente para que no se puedan quitar.
+6. Reiniciar y verificar que el agente envía telemetría y ubicación al servidor.
 
 ---
 
@@ -471,6 +501,7 @@ otros **invocados por el modelo**.
 AGENTS.md          # instrucciones comunes a todos los agentes
 CLAUDE.md          # idem, específico de Claude Code
 GLOSSARY.md        # vocabulario compartido (evita ambigüedad/verbosidad)
+SCOPE.md           # frontera del proyecto: qué entra y qué no
 ```
 Nombre del repo: **`atalaya`**. Componentes: **`atalaya-locator`** (app), **`atalaya-agent`** (módulo
 root), **`atalaya-server`** (Rust). La **API es el contrato** (§2.3): cada componente lo puede

@@ -1,5 +1,7 @@
 # ADR 0001: Software Factory Architecture
 
+Without this ADR, a competent agent would merge and deploy on green checks alone, including privileged agent changes, SOS behavior and production device deployment, and would pick its own tracker, runners or repository layout for each component.
+
 ## Status
 
 Accepted
