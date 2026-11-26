@@ -1,19 +1,46 @@
-# Atalaya Glossary
+# GLOSSARY — Atalaya
 
-- **device**: Android device managed by Atalaya, initially a rooteado Samsung Galaxy XCover 5.
-- **locator**: Kotlin app that reports telemetry, location and commands on device.
-- **agent**: privileged Magisk module and scripts that execute root actions, maintain persistence and process the SOS button.
-- **server**: Rust/Axum service that persists data and exposes the API and web UI.
-- **fix**: one location reading with `lat`, `lon`, `acc`, `ts` and `prov`.
-- **acc**: estimated horizontal location precision in metres at a 68 percent confidence radius.
-- **telemetry**: battery, network, app inventory, usage, integrity and screen state.
-- **command**: an operation requested by the server for the device.
-- **ack**: confirmation that a command was received or completed.
-- **SOS**: event flow activated by the physical button that reports location and alerts the configured group.
-- **task**: a reusable kind of factory work, such as review or implementation.
-- **trigger**: an event that starts a factory run.
-- **run**: one execution of a task on a disposable runner.
-- **runner**: a disposable machine that executes a factory run.
-- **ticket tracker**: GitHub Issues, the factory's human interface.
-- **git host**: GitHub, where branches, pull requests and reviews live.
-- **orchestrator**: GitHub Actions, which receives triggers and starts runs.
+Vocabulario compartido del proyecto. Todos los agentes y documentos usan **estos** términos para
+evitar ambigüedad y verbosidad. Si un concepto no está aquí, se añade antes de usarlo en el código.
+
+## Componentes
+- **device**: el móvil gestionado; por ahora uno solo (Samsung Galaxy XCover 5, rooteado con Magisk).
+- **atalaya-locator** (*locator*): app Kotlin on-device. Ubicación (one-shot + continua), escaneo
+  WiFi/celdas, telemetría de sensores/pantalla, canal WebSocket y captura del SOS.
+- **atalaya-agent** (*agente*, *agent*): proceso root (módulo Magisk). Ejecutor privilegiado (`pm`, `dumpsys`
+  root, systemize), persistencia (mantiene vivo el locator) y escucha del botón lateral (SOS).
+- **atalaya-server** (*server*): servidor Rust (Axum) + SQLite. Recibe telemetría, persiste, sirve el
+  mapa y gestiona la cola de comandos y el fan-out del SOS.
+
+## Datos
+- **fix**: una lectura de ubicación. Campos: `lat`, `lon`, `acc`, `ts`, `prov`.
+- **acc**: precisión horizontal estimada en metros (radio al 68 % de confianza).
+- **prov**: proveedor del fix (`gps` / `fused` / `network`).
+- **telemetría** (*telemetry*): estado del device (batería, red/cobertura, uso/inventario de apps, integridad,
+  pantalla). **Estado, no contenido privado.**
+- **track / traza**: secuencia ordenada de fixes que dibuja el recorrido.
+- **última vez visto**: `últimoContacto`, cuándo se supo por última vez del device.
+
+## Protocolo
+- **comando** (*command*): orden del server al device (p. ej. `REQUEST_LOCATION`, `pm disable-user`).
+- **ack**: confirmación del device de que recibió o completó un comando.
+- **cola offline**: reportes guardados en el device cuando no hay red, reenviados al reconectar
+  (store-and-forward, con IDs de cliente para no duplicar).
+- **heartbeat**: señal ligera periódica para saber que el device sigue vivo.
+
+## SOS
+- **SOS**: flujo de alarma disparado por el botón físico del device, que reporta la ubicación y avisa
+  al grupo configurado.
+- **activación**: patrón del botón que lanza el SOS (por defecto 3 pulsaciones rápidas en ~2 s).
+- **fan-out**: reparto del aviso de SOS desde el server (Telegram, llamada, email…).
+- **cascada**: llamada telefónica secuencial a los contactos (1 → si no contesta, 2 → …).
+- **captura del entorno**: foto(s) silenciosas (trasera + frontal) y audio opcional al disparar el SOS.
+
+## Factoría
+- **task**: tipo reutilizable de trabajo de la factoría (p. ej. revisión o implementación).
+- **trigger**: evento que inicia un run.
+- **run**: una ejecución de una task en un runner desechable.
+- **runner**: máquina desechable que ejecuta un run.
+- **ticket tracker**: GitHub Issues, la interfaz humana de la factoría.
+- **git host**: GitHub, donde viven ramas, pull requests y revisiones.
+- **orchestrator**: GitHub Actions, que recibe los triggers e inicia los runs.

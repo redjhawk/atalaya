@@ -10,6 +10,8 @@ This repository is a monorepo with three independently buildable components:
 
 Use the root README and `GLOSSARY.md` for project context. Read component README files before changing a component.
 
+`SCOPE.md` is the project boundary. Read it before proposing functionality, and reject any spec, ticket or PR that crosses it.
+
 ## Agent skills
 
 ### Issue tracker
