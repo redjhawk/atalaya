@@ -4,6 +4,20 @@
 
 Proposed
 
+## Pending implementation
+
+The automatic update pipeline is **not configured yet**. This remains a factory backlog item until all of the following exist:
+
+- GitHub Actions jobs that build and sign the locator APK and Magisk module ZIP.
+- A signing-key and release-secret model, documented without storing private material in Git.
+- A signed manifest published by the server with version, SHA-256 hashes and signature metadata.
+- Verification logic in the locator and agent before downloading or replacing an artifact.
+- Atomic installation and rollback for both the APK and module.
+- A stable/canary update channel and explicit human promotion controls.
+- End-to-end tests against a disposable Android device before production deployment.
+
+Source merging must not imply production deployment. Privileged module updates and SOS behavior require human re-entry.
+
 ## Decision
 
 Use release artifacts produced by GitHub Actions:
