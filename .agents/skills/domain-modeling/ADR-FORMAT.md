@@ -9,6 +9,7 @@ Create the `docs/adr/` directory lazily: only when the first ADR is needed.
 ```md
 # {Short title of the decision}
 
+{First sentence, the named counterfactual: "Without this ADR, a competent agent would X."}
 {1-3 sentences: what's the context, what did we decide, and why.}
 ```
 
@@ -28,7 +29,19 @@ Scan `docs/adr/` for the highest existing number and increment by one.
 
 ## When to offer an ADR
 
-All three of these must be true:
+### The named counterfactual
+
+Before writing, produce this sentence: "Without this ADR, a competent agent would X."
+
+X must be a concrete, wrong-but-plausible action that neither the compiler, the tests, nor a reading of the code would stop. The sentence is the gate and also the ADR's opening line:
+
+- **No nameable X**: there is nothing to record. Skip the ADR.
+- **The repo already catches X** (a test, a lint rule, a type): skip the ADR.
+- **X is confined to one code site**: write a code comment at that site instead.
+
+### The three conditions
+
+Once the counterfactual holds, all three of these must also be true:
 
 1. **Hard to reverse**: the cost of changing your mind later is meaningful
 2. **Surprising without context**: a future reader will look at the code and wonder "why on earth did they do it this way?"
