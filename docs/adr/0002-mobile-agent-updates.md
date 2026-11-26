@@ -1,8 +1,10 @@
 # ADR 0002: Mobile and Agent Update Channel
 
+Without this ADR, a competent agent would let the locator or the root agent download and install the latest build straight from the server, without verifying a signature or hash, and would treat a merge to `main` as permission to update the production device.
+
 ## Status
 
-Proposed
+Accepted
 
 ## Pending implementation
 
