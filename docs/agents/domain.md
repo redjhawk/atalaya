@@ -3,6 +3,7 @@
 Atalaya uses a single-context domain model:
 
 - `GLOSSARY.md` at the repository root defines project vocabulary.
+- `SCOPE.md` at the repository root defines what is in and out of scope.
 - `docs/adr/` contains architecture decision records.
 - Component documentation lives beside component code in `apps/locator/`, `agent/` and `server/`.
 
