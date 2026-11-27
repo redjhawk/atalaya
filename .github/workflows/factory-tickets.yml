@@ -1,0 +1,69 @@
+name: Factory ticketing
+
+# Task: ticketing. Turns a spec issue into tracer-bullet tickets.
+# Design and the five task questions: docs/agents/factory-tasks.md
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: factory-tickets-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  ticketing:
+    if: >-
+      github.event.label.name == 'factory:tickets' &&
+      github.event.issue.author_association == 'OWNER'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --max-turns 40
+            --allowedTools "Read,Glob,Grep,Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*),Bash(gh api:*)"
+          prompt: |
+            You are one run of the Atalaya factory's ticketing task.
+            Repository: ${{ github.repository }}. Spec issue: #${{ github.event.issue.number }}.
+
+            Read AGENTS.md, SCOPE.md, GLOSSARY.md, docs/agents/ and every ADR in docs/adr/.
+            Then read the spec issue with its comments, and follow
+            .agents/skills/to-tickets/SKILL.md to break it into tickets, with these
+            overrides, because a run never waits for a human:
+
+            - Do not quiz anyone. Publish the tickets directly; a human reviews them in
+              the ticket tracker afterwards.
+            - First list the sub-issues of the spec issue. If it already has any, add a
+              comment saying tickets already exist, remove the `factory:tickets` label
+              and stop without creating anything.
+            - If the spec crosses SCOPE.md or contradicts an accepted ADR, do not create
+              tickets: comment with the conflict, apply `needs-info`, remove the
+              `factory:tickets` label and stop.
+            - Create at most 12 tickets. If the spec needs more, create the first 12 in
+              dependency order and say so in the closing comment.
+            - Write tickets in Spanish with GLOSSARY.md vocabulary, using the issue
+              template of the skill. No file paths, no code.
+            - Make each ticket a sub-issue of the spec issue and set its native
+              "blocked by" links, as well as the "Blocked by" section.
+            - Label a ticket `ready-for-human` when it is a production deployment, a
+              privileged Magisk change, secret handling or SOS behavior, or when only a
+              person can do it. Label every other ticket `ready-for-agent`. When a
+              ticket touches authentication, say in its body that the PR requires
+              human approval.
+            - Never put credentials, hostnames, certificate fingerprints or real
+              location data in a ticket.
+            - Do not edit the spec issue body, do not close any issue, and do not change
+              any file in the repository.
+
+            Finish with one comment on the spec issue listing the tickets created with
+            their blockers, then remove the `factory:tickets` label.
