@@ -12,6 +12,8 @@ Turns a spec into tracer-bullet tickets. Wired up in `.github/workflows/factory-
 4. **Where does a human re-enter?** After the run: the human reads the tickets, edits or closes them, and decides which to hand to an agent. A spec that crosses `SCOPE.md` or contradicts an ADR gets `needs-info` and no tickets.
 5. **What stops two runs doing the same work?** One run per spec issue at a time (workflow concurrency). A run that finds existing sub-issues creates nothing. The run removes the trigger label when it ends.
 
+Runs execute on the self-hosted runner set `atalaya-factory`, a k3s cluster in the home network; see `factory/runner/README.md`. Until that runner is installed, a triggered run stays queued.
+
 The task needs one repository secret set by a human: `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`. Without it every run fails and nothing is created.
 
 ## Not automated yet
