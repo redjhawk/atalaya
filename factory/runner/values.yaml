@@ -1,0 +1,29 @@
+# Helm values for the gha-runner-scale-set chart (Actions Runner Controller).
+# Install steps: factory/runner/README.md
+
+githubConfigUrl: https://github.com/redjhawk/atalaya
+
+# Kubernetes secret created by hand; it is never stored in Git.
+githubConfigSecret: atalaya-runner-github
+
+# The name workflows use in `runs-on`.
+runnerScaleSetName: atalaya-factory
+
+# No idle runner. One run at a time: start slow.
+minRunners: 0
+maxRunners: 1
+
+template:
+  spec:
+    automountServiceAccountToken: false
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: "2"
+            memory: 4Gi

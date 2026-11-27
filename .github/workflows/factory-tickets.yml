@@ -20,10 +20,20 @@ jobs:
     if: >-
       github.event.label.name == 'factory:tickets' &&
       github.event.issue.author_association == 'OWNER'
-    runs-on: ubuntu-latest
+    # Self-hosted, ephemeral runner on k3s: factory/runner/README.md
+    runs-on: atalaya-factory
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Ensure the gh CLI is available
+        env:
+          GH_VERSION: "2.63.2"
+        run: |
+          if ! command -v gh >/dev/null; then
+            curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
+              | tar -xz -C "$RUNNER_TEMP"
+            echo "$RUNNER_TEMP/gh_${GH_VERSION}_linux_amd64/bin" >> "$GITHUB_PATH"
+          fi
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
