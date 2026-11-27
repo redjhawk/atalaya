@@ -6,7 +6,10 @@ Without this ADR, a competent agent would authenticate the device with a bearer 
 
 Accepted
 
-Implementation is blocked until the two prerequisites in the README deployment section are verified.
+Prerequisites:
+
+- **Cloudflare, verified on 2026-11-27** with a test certificate and hostname: a client certificate from the Cloudflare-managed CA can be issued, mTLS can be enforced on a hostname, the origin receives the certificate SHA-256 fingerprint and it matches the certificate, and a revoked certificate is blocked at the edge. Server implementation is unblocked.
+- **Hardware-backed Keystore on the XCover 5: not verified yet.** It blocks certificate enrolment in the locator, not the server.
 
 ## Context
 
@@ -20,7 +23,7 @@ Authenticate the locator with a client certificate validated by Cloudflare, and 
 
 - **Hostnames**: the device API and WebSocket live on an API hostname that requires mTLS. The web UI lives on a separate hostname behind an interactive login, because a browser has no client certificate.
 - **Edge enforcement**: mTLS is enabled on the API hostname, with a WAF rule that blocks any request whose client certificate is not verified or is revoked.
-- **Device identity**: Cloudflare forwards the certificate SHA-256 fingerprint to the origin in a request header. The server stores one fingerprint per device and rejects requests whose fingerprint does not match the `{device}` in the path. This replaces both the bearer token and the Access service token for device traffic.
+- **Device identity**: Cloudflare forwards the certificate SHA-256 fingerprint to the origin in a request header, `X-Client-Cert-Sha256`, set by a request header transform rule from `cf.tls_client_auth.cert_fingerprint_sha256`. The value is lowercase hex without separators. The server stores one fingerprint per device and rejects requests whose fingerprint does not match the `{device}` in the path. This replaces both the bearer token and the Access service token for device traffic.
 - **Trust in the header**: the server listens on localhost only and is reachable only through the tunnel, so the forwarded header cannot be set by anyone but Cloudflare.
 - **Private key**: generated on the device in Android Keystore as non-exportable. It never leaves the device and is never stored in Git.
 - **Agent**: the root agent does not hold the device key. Anything it needs to send goes through the locator.
@@ -43,4 +46,4 @@ No self-service enrolment endpoint exists. Adding one is deferred until more tha
 - Root on the device can use the key but cannot extract it if the Keystore is hardware-backed. Whether it still is on the XCover 5 with Knox tripped must be verified on the device.
 - An expired or wrongly revoked certificate silences the device, including SOS. The certificate gets a long validity, the server tracks its expiry date and warns ahead of it, and silence detection remains the safety net.
 - Replacing the device, or rotating the certificate, means repeating the enrolment by hand.
-- Availability of the Cloudflare-managed client CA and of fingerprint forwarding on the current plan must be confirmed before implementation.
+- The edge rule must block both an unverified and a revoked certificate; a revoked certificate is not caught by the verification check alone.

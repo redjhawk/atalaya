@@ -362,7 +362,10 @@ la niña pueda enviar un **SOS / "estoy aquí"** con una pulsación, sin abrir n
 La autenticación por mTLS (`docs/adr/0003-device-mtls-behind-cloudflare.md`) depende de dos cosas
 que hay que verificar con una prueba real antes de empezar a implementar:
 
-- [ ] **Cloudflare: CA de cliente y reenvío de la huella en el plan actual.**
+La comprobación de Cloudflare está detallada paso a paso en `docs/SETUP.md`.
+
+- [x] **Cloudflare: CA de cliente y reenvío de la huella en el plan actual.** Comprobado el
+  2026-11-27; la cabecera es `X-Client-Cert-Sha256`.
   1. *SSL/TLS → Client Certificates*: se puede crear un certificado y activar mTLS en el hostname.
   2. *Rules → Transform Rules*: una regla añade la cabecera `X-Client-Cert-Sha256` con
      `cf.tls_client_auth.cert_fingerprint_sha256`.
