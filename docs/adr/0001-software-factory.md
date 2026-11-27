@@ -14,7 +14,6 @@ Atalaya uses one GitHub monorepo for the locator, agent and server. GitHub Issue
 
 Start with GitHub-hosted runners for code compilation and deterministic checks. Add labels for specialized self-hosted runners when required:
 
-- `atalaya-factory`: agent runs that only read the repository and write to the ticket tracker, on ephemeral pods in a home k3s cluster. Never used by workflows that a pull request can trigger.
 - `atalaya-linux`: server builds and integration tests.
 - `atalaya-android`: Gradle builds and Android emulator tests.
 - `atalaya-device`: controlled XCover hardware tests.
