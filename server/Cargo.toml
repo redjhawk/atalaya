@@ -1,0 +1,15 @@
+[package]
+name = "atalaya-server"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+axum = "0.8.9"
+sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "net", "signal", "sync"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tokio = { version = "1.54.1", features = ["io-util"] }
+tower = { version = "0.5.3", features = ["util"] }
