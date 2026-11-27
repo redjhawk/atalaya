@@ -26,6 +26,10 @@ The canonical labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready
 
 Use the single-context `GLOSSARY.md` and ADRs in `docs/adr/`. See `docs/agents/domain.md`.
 
+### Factory tasks
+
+Automated tasks, their triggers and where a human re-enters. See `docs/agents/factory-tasks.md`.
+
 ## Delivery rules
 
 1. Read the originating issue/spec before implementation.
