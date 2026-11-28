@@ -252,4 +252,66 @@ mod tests {
             .unwrap();
         assert_eq!(fixes, 0);
     }
+
+    /// TS-TELEMETRY-007: the last contact never moves backwards. A reception
+    /// earlier than the stored last contact (as when an older request
+    /// commits after a newer one) stores the fix and keeps the later value;
+    /// a NULL last contact takes the reception time.
+    #[tokio::test]
+    async fn the_last_contact_only_moves_forward() {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = crate::open_database(&dir.path().join("atalaya.db"))
+            .await
+            .unwrap();
+        let later = super::now_ms() + 86_400_000;
+        sqlx::query(
+            "INSERT INTO devices (id, name, fingerprint, last_contact) \
+             VALUES ('ahead', 'Ahead', ?, ?), ('fresh', 'Fresh', ?, NULL)",
+        )
+        .bind(FP)
+        .bind(later)
+        .bind(FP.replace('a', "b"))
+        .execute(&pool)
+        .await
+        .unwrap();
+        let router = crate::device_router(
+            pool.clone(),
+            HeaderName::from_static("x-client-cert-sha256"),
+        );
+
+        for (device, fingerprint) in [("ahead", FP.to_owned()), ("fresh", FP.replace('a', "b"))] {
+            let before = super::now_ms();
+            let request = Request::builder()
+                .method(Method::POST)
+                .uri(format!("/telemetry/{device}"))
+                .header("content-type", "application/json")
+                .header("x-client-cert-sha256", fingerprint)
+                .body(Body::from(VALID))
+                .unwrap();
+            let response = router.clone().oneshot(request).await.unwrap();
+            let after = super::now_ms();
+
+            assert_eq!(response.status(), StatusCode::CREATED);
+            let received: Vec<i64> =
+                sqlx::query_scalar("SELECT received_at FROM fixes WHERE device_id = ?")
+                    .bind(device)
+                    .fetch_all(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(received.len(), 1);
+            assert!((before..=after).contains(&received[0]));
+            let last_contact: Option<i64> =
+                sqlx::query_scalar("SELECT last_contact FROM devices WHERE id = ?")
+                    .bind(device)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            let expected = if device == "ahead" {
+                later
+            } else {
+                received[0]
+            };
+            assert_eq!(last_contact, Some(expected));
+        }
+    }
 }
