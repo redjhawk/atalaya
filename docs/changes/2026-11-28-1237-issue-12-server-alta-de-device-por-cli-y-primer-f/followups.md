@@ -25,3 +25,7 @@ server/tests/health.rs:24: drop the local `fingerprint_header()` and use `mod co
 ## R1-08 
 
 server/tests/telemetry.rs:120-122: replace the `while now_ms() < l1 + 5 { yield_now }` loop with `tokio::time::sleep(Duration::from_millis(5)).await` (keep the comment explaining why).
+
+## R2-02 
+
+server/src/telemetry.rs:203-252: move the non-UTF-8 `{device}` case to server/tests/telemetry.rs next to the other identity-failure cases. Use `common::fix_request("%FF", fingerprint, VALID)`, `common::send` and `common::count_all_fixes`, split the `[None, Some(FP)]` loop into two tests, and delete the in-source module.
