@@ -1,0 +1,2 @@
+- The server under verification listens on `http://127.0.0.1:8080` (device API) and `http://127.0.0.1:8081` (panel). Send the certificate fingerprint as the `x-client-cert-sha256` request header, with a fake value registered for the test device.
+- Subcommands of the server binary run with `cargo run --locked --offline --manifest-path server/Cargo.toml -- <subcommand>`, with `ATALAYA_DATABASE_PATH` pointing at the database of the running server.

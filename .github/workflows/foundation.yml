@@ -1,0 +1,28 @@
+name: Foundation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate required repository docs
+        run: |
+          test -f AGENTS.md
+          test -f docs/GLOSSARY.md
+          test -f apps/locator/README.md
+          test -f agent/README.md
+          test -f server/README.md
+      - name: Detect trailing whitespace
+        run: |
+          if grep -RInE '[[:blank:]]+$' --include='*.md' --include='*.yml' --include='*.yaml' .; then
+            echo 'Trailing whitespace found' >&2
+            exit 1
+          fi

@@ -1,28 +1,70 @@
-name: Atalaya factory
-
+# Agent factory (.factory/core/bin/factory.sh): takes an issue labelled with the factory label from specification
+# to a merged pull request. State lives on branch ai-dev/issue-<n>; a comment by the owner on the issue
+# (answering questions) resumes it. The factory is copied from the base branch before switching to the work
+# branch, so a change cannot rewrite its own pipeline, and .factory/, .github/ and the agent instructions are
+# never merged automatically.
+# Installed by the agent factory installer. Local edits are kept on update (the new version goes to *.factory-new).
+#
+# Repository settings: secrets FACTORY_TOKEN (contents, pull requests, issues) and CLAUDE_CODE_OAUTH_TOKEN;
+# variables FACTORY_LABEL (ai-dev), FACTORY_BASE_BRANCH (main), FACTORY_RUNNER (ubuntu-latest), FACTORY_GIT_NAME.
+name: factory
+run-name: "factory #${{ github.event.issue.number || inputs.issue }}"
 on:
-  pull_request:
-  push:
-    branches: [main]
-
-permissions:
-  contents: read
-
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue: {description: 'Issue number', required: true}
 jobs:
-  foundation:
-    runs-on: ubuntu-latest
+  factory:
+    if: >-
+      github.actor == github.repository_owner && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'issues' && github.event.label.name == (vars.FACTORY_LABEL || 'ai-dev')) ||
+        (github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
+          contains(github.event.issue.labels.*.name, vars.FACTORY_LABEL || 'ai-dev') &&
+          !contains(github.event.comment.body, '<!-- agent-factory -->'))
+      )
+    # At job level, so that runs whose job is skipped (the factory's own label changes and comments) never join
+    # the group: a pending run is cancelled when another run of its group queues behind it.
+    concurrency:
+      group: factory-${{ github.event.issue.number || inputs.issue }}
+      cancel-in-progress: false
+    runs-on: ${{ vars.FACTORY_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    env:
+      ISSUE: ${{ github.event.issue.number || inputs.issue }}
+      GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_MODEL: ${{ vars.FACTORY_MODEL }}
     steps:
       - uses: actions/checkout@v4
-      - name: Validate required repository docs
+        with:
+          ref: ${{ vars.FACTORY_BASE_BRANCH || 'main' }}
+          fetch-depth: 0
+          token: ${{ secrets.FACTORY_TOKEN }}
+      - name: Tools
         run: |
-          test -f AGENTS.md
-          test -f GLOSSARY.md
-          test -f apps/locator/README.md
-          test -f agent/README.md
-          test -f server/README.md
-      - name: Detect trailing whitespace
+          command -v claude >/dev/null || npm install -g "@anthropic-ai/claude-code@${{ vars.FACTORY_CLAUDE_VERSION || 'latest' }}"
+          if ! command -v bwrap >/dev/null || ! command -v socat >/dev/null; then sudo apt-get update -q && sudo apt-get install -y -q bubblewrap socat; fi
+      - name: Prepare
         run: |
-          if grep -RInE '[[:blank:]]+$' --include='*.md' --include='*.yml' --include='*.yaml' .; then
-            echo 'Trailing whitespace found' >&2
-            exit 1
-          fi
+          echo "FACTORY_LOG_DIR=$RUNNER_TEMP/factory-logs" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/factory-logs"
+          .factory/core/bin/factory setup
+          cp -r .factory "$RUNNER_TEMP/factory"
+          git config user.name "${{ vars.FACTORY_GIT_NAME || 'agent-factory' }}"
+          git config user.email "${{ vars.FACTORY_GIT_EMAIL || 'agent-factory@users.noreply.github.com' }}"
+      - name: Factory
+        run: FACTORY_HOME="$RUNNER_TEMP/factory" "$RUNNER_TEMP/factory/core/bin/factory" run "$ISSUE"
+      - name: Agent logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-logs-${{ env.ISSUE }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/factory-logs
+          if-no-files-found: ignore

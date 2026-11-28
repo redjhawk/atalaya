@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Entry point of the agent factory.
+#
+#   .factory/core/bin/factory run <issue> [--no-push] [--until <stage>]   take an issue to a merged PR
+#   .factory/core/bin/factory doctor                                       health check (read-only)
+#   .factory/core/bin/factory setup                                        project_setup from config.sh
+#   .factory/core/bin/factory repair <issue>                               repair a technical stop
+#   .factory/core/bin/factory supervise [--dry-run]                        one supervisor pass
+#   .factory/core/bin/factory version
+set -euo pipefail
+FACTORY_BIN="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cmd=${1:-}; [ $# -eq 0 ] || shift
+case $cmd in
+  run) exec "$FACTORY_BIN/factory.sh" "$@" ;;
+  repair) exec "$FACTORY_BIN/repair.sh" "$@" ;;
+  doctor) exec "$FACTORY_BIN/doctor.sh" "$@" ;;
+  supervise) exec node "$FACTORY_BIN/supervisor.mjs" "$@" ;;
+  setup)
+    # shellcheck source=lib.sh
+    source "$FACTORY_BIN/lib.sh"
+    cd "$(git rev-parse --show-toplevel)"
+    load_config
+    project_setup ;;
+  version) cat "$FACTORY_BIN/../VERSION" ;;
+  *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || [ "$cmd" = help ] || exit 2 ;;
+esac

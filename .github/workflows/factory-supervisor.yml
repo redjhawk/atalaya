@@ -1,0 +1,72 @@
+# Supervisor of the agent factory (.factory/core/bin/supervisor.mjs). Whenever a factory or repair run ends,
+# and about every 15 minutes, it resumes the runs that stopped for a reason that goes away without the owner
+# (a usage limit, a crash, a bug on the base branch once fixed), starts a repair for technical stops a
+# relaunch does not cure, and, while fewer than FACTORY_MAX_ACTIVE issues are in development, launches the
+# next open issue of a trusted author.
+# Off switch: repository variable FACTORY_SUPERVISOR=off. FACTORY_MAX_ACTIVE=0 stops only the launches.
+# The label factory-hold excludes one issue.
+# Installed by the agent factory installer. Local edits are kept on update (the new version goes to *.factory-new).
+name: factory-supervisor
+on:
+  workflow_run:
+    workflows: [factory, factory-repair]
+    types: [completed]
+  schedule:
+    - cron: '*/15 * * * *' # best effort; the `next` job carries the loop
+  workflow_dispatch:
+jobs:
+  supervisor:
+    if: >-
+      vars.FACTORY_SUPERVISOR != 'off' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped')
+    concurrency:
+      group: factory-supervisor
+      cancel-in-progress: false
+    # The probe must meet the sandbox the factory's agents meet: same runner as the factory.
+    runs-on: ${{ vars.FACTORY_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      # The owner's token: a relaunch is a comment by the owner, and a launch a label added by the owner;
+      # both start the factory workflow.
+      GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_MAX_ACTIVE: ${{ vars.FACTORY_MAX_ACTIVE }}
+      FACTORY_LABEL: ${{ vars.FACTORY_LABEL }}
+      FACTORY_BASE_BRANCH: ${{ vars.FACTORY_BASE_BRANCH }}
+      FACTORY_MODEL: ${{ vars.FACTORY_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ vars.FACTORY_BASE_BRANCH || 'main' }}
+          persist-credentials: false
+      - name: Tools
+        run: |
+          command -v claude >/dev/null || npm install -g "@anthropic-ai/claude-code@${{ vars.FACTORY_CLAUDE_VERSION || 'latest' }}"
+          if ! command -v bwrap >/dev/null || ! command -v socat >/dev/null; then sudo apt-get update -q && sudo apt-get install -y -q bubblewrap socat; fi
+      - name: Supervise
+        run: .factory/core/bin/factory supervise
+  next:
+    # The loop: about 15 minutes after this run, dispatch the next one, unless a newer run already carries it.
+    needs: supervisor
+    if: ${{ !cancelled() && needs.supervisor.result != 'skipped' && vars.FACTORY_SUPERVISOR != 'off' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FACTORY_TOKEN: ${{ secrets.FACTORY_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Wait
+        run: sleep 780
+      - name: Dispatch the next run
+        run: |
+          newer=$(gh run list --workflow factory-supervisor.yml --limit 20 --json databaseId,conclusion \
+            --jq "[.[] | select(.databaseId > $GITHUB_RUN_ID and (.conclusion | IN(\"cancelled\", \"skipped\", \"startup_failure\") | not))] | length")
+          if [ "$newer" -gt 0 ]; then echo "A newer supervisor run carries the loop."; exit 0; fi
+          # As the owner first: runs dispatched with GITHUB_TOKEN can end in startup_failure.
+          GH_TOKEN=$FACTORY_TOKEN gh workflow run factory-supervisor.yml --ref "${{ vars.FACTORY_BASE_BRANCH || 'main' }}" ||
+            gh workflow run factory-supervisor.yml --ref "${{ vars.FACTORY_BASE_BRANCH || 'main' }}"

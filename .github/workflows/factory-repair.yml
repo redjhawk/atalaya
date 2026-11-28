@@ -1,0 +1,62 @@
+# Repair of the agent factory (.factory/core/bin/repair.sh). The supervisor posts a repair comment on an issue
+# that stopped for a technical reason (a failed gate, a blocked environment, an error that relaunches did not
+# cure); this workflow starts on it. An agent fixes the cause on the base branch (.factory/local/, code, tests),
+# the fix must pass the whole suite, then repair.sh merges it and relaunches the issue.
+# The comment carries the <!-- agent-factory --> marker, so the factory workflow ignores it.
+# Installed by the agent factory installer. Local edits are kept on update (the new version goes to *.factory-new).
+name: factory-repair
+run-name: "repair #${{ github.event.issue.number || inputs.issue }}"
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue: {description: 'Issue number', required: true}
+jobs:
+  repair:
+    if: >-
+      github.actor == github.repository_owner && (
+        github.event_name == 'workflow_dispatch' ||
+        (!github.event.issue.pull_request && contains(github.event.comment.body, '<!-- factory-supervisor {"action":"repair"'))
+      )
+    concurrency:
+      group: factory-repair # one repair at a time: each one changes the base branch
+      cancel-in-progress: false
+    runs-on: ${{ vars.FACTORY_RUNNER || 'ubuntu-latest' }}
+    # Below the supervisor's repairMinutes (180), so that a repair without an outcome is not taken as running.
+    timeout-minutes: 170
+    permissions:
+      contents: read
+    env:
+      ISSUE: ${{ github.event.issue.number || inputs.issue }}
+      GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_MODEL: ${{ vars.FACTORY_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ vars.FACTORY_BASE_BRANCH || 'main' }}
+          fetch-depth: 0
+          token: ${{ secrets.FACTORY_TOKEN }}
+      - name: Tools
+        run: |
+          command -v claude >/dev/null || npm install -g "@anthropic-ai/claude-code@${{ vars.FACTORY_CLAUDE_VERSION || 'latest' }}"
+          if ! command -v bwrap >/dev/null || ! command -v socat >/dev/null; then sudo apt-get update -q && sudo apt-get install -y -q bubblewrap socat; fi
+      - name: Prepare
+        run: |
+          echo "FACTORY_LOG_DIR=$RUNNER_TEMP/repair-logs" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/repair-logs"
+          .factory/core/bin/factory setup
+          # Run from a copy, so the repair's own edits do not change the script that is running.
+          cp -r .factory "$RUNNER_TEMP/factory"
+          git config user.name "${{ vars.FACTORY_GIT_NAME || 'agent-factory' }}"
+          git config user.email "${{ vars.FACTORY_GIT_EMAIL || 'agent-factory@users.noreply.github.com' }}"
+      - name: Repair
+        run: FACTORY_HOME="$RUNNER_TEMP/factory" "$RUNNER_TEMP/factory/core/bin/factory" repair "$ISSUE"
+      - name: Agent logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repair-logs-${{ env.ISSUE }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/repair-logs
+          if-no-files-found: ignore
