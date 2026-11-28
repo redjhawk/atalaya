@@ -1,0 +1,59 @@
+{
+  "steps": [
+    {
+      "step": "1.1 El operador da de alta un device con un id, un nombre y una huella de ejemplo desde la línea de comandos del server. Ve una línea que confirma el alta con ese id.",
+      "status": "pass",
+      "observed": "`atalaya-server device add verify-phone-1 \"Móvil de verificación\" 1111…1111` against the running server's database printed `device verify-phone-1 enrolled` and exited 0. CLI errors also match the README: duplicate id -> exit 1 `device verify-phone-1 already exists`; fingerprint of another device -> exit 1 `fingerprint already belongs to another device`; malformed fingerprint `zz` -> exit 2 `invalid fingerprint: 64 hexadecimal characters, no separators`; revoke of unknown id -> exit 1 `no device ghost-device`; `device` with no action -> exit 2 with usage."
+    },
+    {
+      "step": "1.2 El operador arranca el server. Arranca como antes, con el device API y el panel.",
+      "status": "pass",
+      "observed": "The pipeline had already started the server. `GET /healthz` returned `200 ok` on 8080 and on 8081. The enrolment made through the CLI while the server was running took effect on the next request with no restart, as the README says."
+    },
+    {
+      "step": "1.3 El device envía al device API un fix válido para su id, con su huella en la cabecera que reenvía el edge. Recibe 201 Created.",
+      "status": "pass",
+      "observed": "`POST http://127.0.0.1:8080/telemetry/verify-phone-1` with `x-client-cert-sha256: 1111…1111` and `{\"location\":{\"lat\":40.0,\"lon\":-3.0,\"acc\":12.5,\"ts\":1700000000000,\"prov\":\"fused\"}}` -> `201 Created`, empty body."
+    },
+    {
+      "step": "1.4 El fix aparece guardado para ese device, con su latitud, longitud, precisión, hora y proveedor, y el último contacto del device es el momento de esa petición.",
+      "status": "pass",
+      "observed": "No surface shows stored fixes: the panel only serves /healthz and the CLI has no list command. The only tools this stage could use were curl and cargo run, so the database was checked by reading the raw SQLite WAL. It holds a `fixes` row for `verify-phone-1` with `prov` `fused` and numeric columns. Its trailing `received_at` bytes equal the `last_contact` bytes written to the `devices` row in the same transaction (before that, `last_contact` was empty). The exact lat/lon/acc/ts values could not be decoded from the raw bytes."
+    },
+    {
+      "step": "2.1 Con el server en marcha, el operador sustituye la huella del device por otra huella de ejemplo. Ve una línea que lo confirma.",
+      "status": "pass",
+      "observed": "`device set-fingerprint verify-phone-1 2222…2222` -> `device verify-phone-1 fingerprint replaced`, exit 0. The device row in the WAL keeps its name and last contact, with the new fingerprint."
+    },
+    {
+      "step": "2.2 El device envía un fix con la huella nueva. Recibe 201 Created y el fix queda guardado.",
+      "status": "pass",
+      "observed": "A fix with `x-client-cert-sha256: 2222…2222` (prov gps) -> `201 Created`. The WAL now has a second `fixes` row for `verify-phone-1` (`gps`), and `last_contact` moved to the new reception time."
+    },
+    {
+      "step": "2.3 Un fix enviado con la huella anterior recibe 401 y no se guarda.",
+      "status": "pass",
+      "observed": "A fix with the old fingerprint `1111…1111` (prov network) -> `401 Unauthorized`, body `unauthorized`. The latest `fixes` page in the WAL still holds only the fused and gps rows; no `network` row exists."
+    },
+    {
+      "step": "3.1 Con el server en marcha, el operador revoca la huella del device. Ve una línea que lo confirma.",
+      "status": "pass",
+      "observed": "`device revoke verify-phone-1` -> `device verify-phone-1 revoked`, exit 0. The latest device page in the WAL shows `verify-phone-1` with its name and last contact kept and no fingerprint."
+    },
+    {
+      "step": "3.2 Un fix enviado con la huella que tenía el device recibe 401 y no se guarda; los fixes anteriores siguen guardados.",
+      "status": "pass",
+      "observed": "A fix with `2222…2222` after revocation -> `401 Unauthorized`, body `unauthorized`. No new fixes page was written after it. The two earlier fixes (fused, gps) are still in the latest `fixes` page."
+    }
+  ],
+  "findings": [
+    {
+      "blocking": false,
+      "body": "Acceptance criteria beyond the feature path were also checked on the running server, and they hold. On the device listener, a fix with no fingerprint header, with an unknown fingerprint, with another enrolled device's fingerprint (verify-phone-2) or for an unknown device id gets `401 unauthorized`. The authentication check comes before body validation: a non-JSON body with a wrong fingerprint gets 401, while the right fingerprint gets `400 invalid fix` for lat 91, prov `wifi` or a non-JSON body. On the panel listener (8081), the same POST /telemetry/verify-phone-1 with a valid fingerprint header gets `404`. No network enrolment route exists: POST /devices on 8080 and 8081 and POST /device on 8080 all get 404. PUT /telemetry/{device} gets 405."
+    },
+    {
+      "blocking": false,
+      "body": "No surface lets anyone check what was stored. The panel serves nothing but /healthz and the CLI has no read or list command, so step 1.4 and the 'no se guarda' checks had to be done by reading the raw SQLite WAL (/tmp/<run dir>/atalaya.db-wal), because the sqlite3 and python tools were not available to this stage. That confirms that the rows exist, the provider, the fingerprint and the change of last contact. It cannot confirm the exact stored lat/lon/acc/ts/received_at values, and it cannot confirm that last_contact equals received_at, beyond the raw bytes being identical. This is expected at this stage of the project (the panel is a later issue), but persisted values are only verified by the integration tests."
+    }
+  ]
+}
