@@ -503,7 +503,7 @@ otros **invocados por el modelo**.
 /docs              # specs y tickets generados por los skills
 AGENTS.md          # instrucciones comunes a todos los agentes
 CLAUDE.md          # idem, específico de Claude Code
-GLOSSARY.md        # vocabulario compartido (evita ambigüedad/verbosidad)
+docs/GLOSSARY.md   # vocabulario compartido (evita ambigüedad/verbosidad)
 SCOPE.md           # frontera del proyecto: qué entra y qué no
 ```
 Nombre del repo: **`atalaya`**. Componentes: **`atalaya-locator`** (app), **`atalaya-agent`** (módulo

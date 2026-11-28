@@ -1,4 +1,4 @@
-name: Atalaya factory
+name: Foundation
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ jobs:
       - name: Validate required repository docs
         run: |
           test -f AGENTS.md
-          test -f GLOSSARY.md
+          test -f docs/GLOSSARY.md
           test -f apps/locator/README.md
           test -f agent/README.md
           test -f server/README.md

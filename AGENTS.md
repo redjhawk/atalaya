@@ -8,7 +8,7 @@ This repository is a monorepo with three independently buildable components:
 - `agent/`: Magisk module and privileged Android scripts.
 - `server/`: Rust Axum server and SQLite persistence.
 
-Use the root README and `GLOSSARY.md` for project context. Read component README files before changing a component.
+Use the root README and `docs/GLOSSARY.md` for project context. Read component README files before changing a component.
 
 `SCOPE.md` is the project boundary. Read it before proposing functionality, and reject any spec, ticket or PR that crosses it.
 
@@ -24,7 +24,7 @@ The canonical labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready
 
 ### Domain docs
 
-Use the single-context `GLOSSARY.md` and ADRs in `docs/adr/`. See `docs/agents/domain.md`.
+Use the single-context `docs/GLOSSARY.md` and ADRs in `docs/adr/`. See `docs/agents/domain.md`.
 
 ### Factory tasks
 
