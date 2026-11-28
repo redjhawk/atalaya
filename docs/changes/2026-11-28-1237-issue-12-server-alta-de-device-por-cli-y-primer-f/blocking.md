@@ -1,8 +1,0 @@
-# Blocking review findings (round 1)
-
-## R1-01 [spec] `server/src/telemetry.rs:81`
-
-FR-TELEMETRY-003 says a request 'a un {device} que no existe' gets the one identical 401, and FR-TELEMETRY-004 says identity is checked before anything else. The technical spec (telemetry-intake, Data flow step 2) adds: 'The {device} path segment is not validated against the id rules: an id that cannot exist simply finds no row.' The handler takes `Path<String>`. Axum percent-decodes the segment and rejects one that is not valid UTF-8 before the handler runs. So `POST /telemetry/%FF`, with no fingerprint header or with any fingerprint, gets axum's `400` rejection instead of `401 unauthorized\n`. That path is a device that cannot exist, and the response differs from the uniform identity failure. The impact is small (it leaks nothing about enrolled devices), but it breaks the 'five identical responses' rule for an unknown `{device}`. Suggested fix: take the raw segment without the failing extractor, e.g. `Result<Path<String>, PathRejection>` with a rejection mapped to `unauthorized()`, or read the device from `RawPathParams`. Then add a TC-033/TC-035-style case for a non-UTF-8 `{device}` that expects 401.
-
-Triage: Confirmed: `receive` takes `Path<String>` (server/src/telemetry.rs:81), and axum 0.8.9 rejects a percent-decoded segment that is not valid UTF-8 with its own 400 before the handler runs. FR-TELEMETRY-003 requires the same 401 for a `{device}` that does not exist, and technical.md data flow step 2 says the segment is not validated. So `POST /telemetry/%FF` breaks the identity-failure contract on an authentication path. The leak is small, but the contract is still violated.
-

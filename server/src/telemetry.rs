@@ -5,6 +5,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::body::Body;
+use axum::extract::rejection::PathRejection;
 use axum::extract::{FromRef, Path, State};
 use axum::http::{HeaderMap, HeaderName, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -76,14 +77,21 @@ impl Fix {
 }
 
 /// Receives one fix. Identity is checked before the body is read.
+///
+/// A `{device}` segment that does not decode (not valid UTF-8) names a
+/// device that cannot exist, so it gets the identity-failure response, not
+/// the extractor's own rejection.
 pub async fn receive(
     State(state): State<DeviceState>,
-    Path(device): Path<String>,
+    device: Result<Path<String>, PathRejection>,
     headers: HeaderMap,
     body: Body,
 ) -> Response {
     let received_at = now_ms();
 
+    let Ok(Path(device)) = device else {
+        return unauthorized();
+    };
     let Some(fingerprint) = single_header(&headers, &state.fingerprint_header) else {
         return unauthorized();
     };
@@ -190,4 +198,55 @@ fn now_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
     i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::body::Body;
+    use axum::http::{HeaderName, Method, Request, StatusCode};
+    use tower::ServiceExt;
+
+    const FP: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const VALID: &str =
+        r#"{"location":{"lat":40.0,"lon":-3.0,"acc":12.5,"ts":1700000000000,"prov":"fused"}}"#;
+
+    /// FR-TELEMETRY-003: a `{device}` that is not valid UTF-8 cannot exist,
+    /// so it gets the same 401 as every other identity failure.
+    #[tokio::test]
+    async fn a_device_segment_that_is_not_utf8_gets_the_identity_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = crate::open_database(&dir.path().join("atalaya.db"))
+            .await
+            .unwrap();
+        let router = crate::device_router(
+            pool.clone(),
+            HeaderName::from_static("x-client-cert-sha256"),
+        );
+
+        for fingerprint in [None, Some(FP)] {
+            let mut request = Request::builder()
+                .method(Method::POST)
+                .uri("/telemetry/%FF")
+                .header("content-type", "application/json");
+            if let Some(fingerprint) = fingerprint {
+                request = request.header("x-client-cert-sha256", fingerprint);
+            }
+            let response = router
+                .clone()
+                .oneshot(request.body(Body::from(VALID)).unwrap())
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            assert_eq!(&body[..], b"unauthorized\n");
+        }
+        let fixes: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM fixes")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(fixes, 0);
+    }
 }
