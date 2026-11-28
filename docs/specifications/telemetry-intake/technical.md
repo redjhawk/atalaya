@@ -30,7 +30,7 @@ No new dependency: `serde`/`serde_json` for the body, `std::time::SystemTime` fo
 | TS-TELEMETRY-004 | FR-TELEMETRY-004 | The body is taken as `axum::body::Body` (last extractor) and read only after the identity check passes. |
 | TS-TELEMETRY-005 | FR-TELEMETRY-005 | Body parsing and validation into a `Fix`; any failure returns `400`, body `invalid fix\n`. |
 | TS-TELEMETRY-006 | FR-TELEMETRY-001, FR-TELEMETRY-002, FR-TELEMETRY-006, FR-TELEMETRY-007 | Storage in one transaction that re-checks the fingerprint: the fix insert and the `last_contact` update both happen or neither does. |
-| TS-TELEMETRY-007 | FR-TELEMETRY-001, FR-TELEMETRY-002 | Reception time `received_at` = Unix ms from `SystemTime::now()` taken once at the start of the handler, before any database access; it is written to `fixes.received_at` and `devices.last_contact`. |
+| TS-TELEMETRY-007 | FR-TELEMETRY-001, FR-TELEMETRY-002 | Reception time `received_at` = Unix ms from `SystemTime::now()` taken once at the start of the handler, before any database access; it is written to `fixes.received_at`, and `devices.last_contact` takes it only when it is later than the stored value. |
 | TS-TELEMETRY-008 | FR-TELEMETRY-001 | Success returns `201 Created` with an empty body. |
 
 ## Components
@@ -73,7 +73,10 @@ New module `server/src/telemetry.rs`, used by `device_router`:
        SELECT id, ?, ?, ?, ?, ?, ? FROM devices WHERE id = ? AND fingerprint = ?`.
    2. `rows_affected() == 0` → roll back, `401`: the fingerprint was replaced or revoked between
       step 2 and now (FR-TELEMETRY-007).
-   3. `UPDATE devices SET last_contact = ? WHERE id = ?`.
+   3. `UPDATE devices SET last_contact = MAX(COALESCE(last_contact, 0), ?) WHERE id = ?`. Requests
+      can commit out of order (a slow body, a lock wait), so the last contact never moves backwards;
+      the `COALESCE` is needed because SQLite's multi-argument `MAX` returns `NULL` if any argument
+      is `NULL`.
    4. `COMMIT` → `201`.
    `BEGIN IMMEDIATE` takes the write lock before the first read, so concurrent requests (TC-031)
    queue on the busy timeout instead of failing on a stale read snapshot (`SQLITE_BUSY_SNAPSHOT`,
@@ -87,7 +90,7 @@ lowercase hex (ADR 0003) and the CLI stores lowercase (device-enrolment TS-ENROL
 ## Validation notes
 
 - Content type is not checked: the edge and the locator send JSON, and the body is parsed regardless.
-- `last_contact` is set to `received_at`, not to `ts`: the device clock is kept apart from reception
+- `last_contact` is set from `received_at`, not from `ts`: the device clock is kept apart from reception
   time (TC-027).
 - No deduplication: two identical valid requests store two fixes (TC-030).
 

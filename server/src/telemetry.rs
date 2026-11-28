@@ -170,7 +170,10 @@ async fn store(
     if inserted.rows_affected() == 0 {
         return Ok(false);
     }
-    sqlx::query("UPDATE devices SET last_contact = ? WHERE id = ?")
+    // Requests can commit out of order (a slow body, a lock wait), so the last
+    // contact only moves forward: it always shows the latest reception.
+    // SQLite's multi-argument MAX returns NULL when any argument is NULL.
+    sqlx::query("UPDATE devices SET last_contact = MAX(COALESCE(last_contact, 0), ?) WHERE id = ?")
         .bind(received_at)
         .bind(device)
         .execute(&mut *tx)
