@@ -4,6 +4,11 @@ use atalaya_server::{Config, Server};
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    // Stub: the `device` subcommands are not implemented yet.
+    if std::env::args_os().nth(1).is_some() {
+        eprintln!("atalaya-server: subcommands are not implemented");
+        return ExitCode::FAILURE;
+    }
     match run().await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
