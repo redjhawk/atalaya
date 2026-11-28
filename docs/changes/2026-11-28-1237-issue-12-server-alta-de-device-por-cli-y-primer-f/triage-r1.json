@@ -1,0 +1,74 @@
+[
+  {
+    "id": "R1-01",
+    "blocking": true,
+    "reason": "Confirmed: `receive` takes `Path<String>` (server/src/telemetry.rs:81), and axum 0.8.9 rejects a percent-decoded segment that is not valid UTF-8 with its own 400 before the handler runs. FR-TELEMETRY-003 requires the same 401 for a `{device}` that does not exist, and technical.md data flow step 2 says the segment is not validated. So `POST /telemetry/%FF` breaks the identity-failure contract on an authentication path. The leak is small, but the contract is still violated.",
+    "followup": "none",
+    "consequence": "",
+    "title": "",
+    "todo": "Take the path segment so it cannot be rejected before the identity check, e.g. `Result<Path<String>, PathRejection>` with the rejection mapped to `unauthorized()` (server/src/telemetry.rs:79-84). Add a test like TC-033 that posts to a non-UTF-8 `{device}` (e.g. `/telemetry/%FF`), with and without a fingerprint header, and expects `401 unauthorized\\n` with no fix stored."
+  },
+  {
+    "id": "R1-02",
+    "blocking": false,
+    "reason": "Duplicated test data in the two TC-025 tests in server/tests/routes.rs. This is a readability simplification with no effect on behaviour or on what the tests prove.",
+    "followup": "note",
+    "consequence": "",
+    "title": "",
+    "todo": "server/tests/routes.rs:13-29 and 53-66 list the same malformed calls. Extract one shared helper (like `malformed_calls()` in server/tests/enrolment_cli.rs) and use it in both TC-025 tests."
+  },
+  {
+    "id": "R1-03",
+    "blocking": false,
+    "reason": "The `is_unique_violation` branch in `add` (server/src/devices.rs:166-178) cannot be reached under BEGIN IMMEDIATE, as its own comment says. It is extra code, not a bug: if it were reached, it would still map to the correct error.",
+    "followup": "note",
+    "consequence": "",
+    "title": "",
+    "todo": "server/src/devices.rs:166-178: remove the defence-in-depth unique-violation branch and propagate the insert error with `?`, or map a unique violation straight to one error without the extra query."
+  },
+  {
+    "id": "R1-04",
+    "blocking": false,
+    "reason": "`exists` takes raw SQL, and the id and fingerprint lookups are written several times in server/src/devices.rs. The behaviour is correct; this is a naming and duplication refactor.",
+    "followup": "note",
+    "consequence": "",
+    "title": "",
+    "todo": "server/src/devices.rs:148-178, 203-211, 237-247: replace `exists(tx, sql, value)` with named helpers `id_taken(tx, id)` and `fingerprint_taken(tx, fingerprint, except_id)`, and use them in `add` and `set_fingerprint`."
+  },
+  {
+    "id": "R1-05",
+    "blocking": false,
+    "reason": "`Fix::validate() -> bool` (server/src/telemetry.rs:70) works correctly. A name like `is_valid` would say more clearly that it returns a yes/no answer.",
+    "followup": "note",
+    "consequence": "",
+    "title": "",
+    "todo": "server/src/telemetry.rs:70: rename `Fix::validate` to `is_valid` (or `is_within_bounds`) and update the caller in `read_fix`."
+  },
+  {
+    "id": "R1-06",
+    "blocking": false,
+    "reason": "server/tests/health.rs:24 adds its own `fingerprint_header()` instead of using the shared helper in tests/common/mod.rs. This is a minor deviation from the test-helper convention in the README, with no effect on behaviour.",
+    "followup": "note",
+    "consequence": "",
+    "title": "",
+    "todo": "server/tests/health.rs:24: drop the local `fingerprint_header()` and use `mod common;` with `common::default_header()`. Check that pulling in the common module does not raise dead-code warnings under clippy -D warnings."
+  },
+  {
+    "id": "R1-07",
+    "blocking": false,
+    "reason": "TC-040 in testcases.md:90 includes the reassignment step itself: it runs `set-fingerprint phone-1 FP_B` and expects 201 with two fixes. So the test follows its case, and splitting it would diverge from the specified case.",
+    "followup": "none",
+    "consequence": "",
+    "title": "",
+    "todo": ""
+  },
+  {
+    "id": "R1-08",
+    "blocking": false,
+    "reason": "server/tests/telemetry.rs:120 waits for about 5 ms with a `yield_now` loop. This is correct but spins the CPU, where a sleep would be cleaner. The finding is cosmetic.",
+    "followup": "note",
+    "consequence": "",
+    "title": "",
+    "todo": "server/tests/telemetry.rs:120-122: replace the `while now_ms() < l1 + 5 { yield_now }` loop with `tokio::time::sleep(Duration::from_millis(5)).await` (keep the comment explaining why)."
+  }
+]
