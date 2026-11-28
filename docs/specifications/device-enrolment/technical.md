@@ -49,22 +49,26 @@ New modules in `server/src/`, exported from `lib.rs`:
     `!value.trim().is_empty()`. Stored as given, without trimming (`"  Móvil  "` keeps its spaces).
   - `Fingerprint(String)`: exactly 64 bytes, each an ASCII hex digit; stored with
     `to_ascii_lowercase()`. `as_str()` returns the lowercase form.
-  - `InputError { field: Field, reason }` with `Field::{Id, Name, Fingerprint}`.
+  - `InputError { field: Field }` with `Field::{Id, Name, Fingerprint}`; its message is fixed per
+    field (see "Output and errors").
   - `EnrolError::{DeviceExists(DeviceId), UnknownDevice(DeviceId), FingerprintTaken, Database(sqlx::Error)}`.
   - `async fn add(pool, &DeviceId, &DeviceName, &Fingerprint) -> Result<(), EnrolError>`
   - `async fn set_fingerprint(pool, &DeviceId, &Fingerprint) -> Result<FingerprintChange, EnrolError>`
     with `FingerprintChange::{Replaced, Unchanged}`.
   - `async fn revoke(pool, &DeviceId) -> Result<(), EnrolError>`
 - `cli.rs`: argument parsing and running a subcommand.
-  - `enum Command { Serve, Add { id, name, fingerprint }, SetFingerprint { id, fingerprint }, Revoke { id } }`
+  - `enum Command { Serve, Device(DeviceCommand) }` and
+    `enum DeviceCommand { Add { id, name, fingerprint }, SetFingerprint { id, fingerprint }, Revoke { id } }`
     holding the validated types.
   - `fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, CliError>` (arguments
     after the program name). `CliError::{Usage, Input(InputError)}`. A non-UTF-8 argument is a usage
     error.
   - `pub const USAGE: &str`, listing the three forms (see below).
-  - `async fn run(command, &Config) -> Result<String, EnrolError>` returning the confirmation line.
+  - `async fn run(DeviceCommand, &Config) -> Result<String, RunError>` returning the confirmation
+    line; `RunError::{Start(StartError), Enrol(EnrolError)}` (opening or migrating the database, or
+    the operation).
 - `main.rs`: `cli::parse(std::env::args_os().skip(1))`; on `Serve` it runs today's start path
-  unchanged; on a subcommand it calls `cli::run` and prints; maps errors to exit codes.
+  unchanged; on `Device` it calls `cli::run` and prints; maps errors to exit codes.
 
 `open_database` gains an explicit `.busy_timeout(Duration::from_secs(5))` so that a CLI write and a
 server write wait for each other instead of failing with `SQLITE_BUSY`.

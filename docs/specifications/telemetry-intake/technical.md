@@ -68,15 +68,16 @@ New module `server/src/telemetry.rs`, used by `device_router`:
    string, an unknown `prov`. JSON numbers outside the `f64` or `i64` range fail to parse. Integer
    `lat`/`lon` (`-90`, `180`) deserialize into `f64` and are accepted.
 5. `fix.validate()`; false → `400` (bounds, `acc < 0`, `ts <= 0`, so `ts` `0` and `-5`).
-6. Store, in one transaction:
+6. Store, in one `BEGIN IMMEDIATE` transaction:
    1. `INSERT INTO fixes (device_id, lat, lon, acc, ts, prov, received_at)
        SELECT id, ?, ?, ?, ?, ?, ? FROM devices WHERE id = ? AND fingerprint = ?`.
    2. `rows_affected() == 0` → roll back, `401`: the fingerprint was replaced or revoked between
       step 2 and now (FR-TELEMETRY-007).
    3. `UPDATE devices SET last_contact = ? WHERE id = ?`.
    4. `COMMIT` → `201`.
-   The first statement is a write, so the transaction takes the write lock immediately and concurrent
-   requests (TC-031) queue on the busy timeout instead of failing on a stale read snapshot.
+   `BEGIN IMMEDIATE` takes the write lock before the first read, so concurrent requests (TC-031)
+   queue on the busy timeout instead of failing on a stale read snapshot (`SQLITE_BUSY_SNAPSHOT`,
+   which the busy timeout does not retry).
 7. A database error at any step → `503`, body `database unavailable\n`, as `GET /healthz` does;
    nothing is stored (the transaction rolls back on drop).
 
