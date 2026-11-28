@@ -1,30 +1,37 @@
 //! Atalaya server: the device API and the panel, on two separate listeners.
 
+pub mod cli;
 pub mod config;
+pub mod devices;
+pub mod telemetry;
 
 use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::Path;
+use std::time::Duration;
 
 use axum::Router;
 use axum::extract::State;
-use axum::http::StatusCode;
-use axum::routing::get;
+use axum::http::{HeaderName, StatusCode};
+use axum::routing::{get, post};
 use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 
 pub use config::{Config, ConfigError};
+use telemetry::DeviceState;
 
 /// Opens the SQLite database, creating the file when missing, and applies
-/// every pending migration.
+/// every pending migration. A writer waits up to five seconds for another
+/// one, because the CLI and a running server share the file.
 pub async fn open_database(path: &Path) -> Result<SqlitePool, StartError> {
     let options = SqliteConnectOptions::new()
         .filename(path)
         .create_if_missing(true)
         .foreign_keys(true)
-        .journal_mode(SqliteJournalMode::Wal);
+        .journal_mode(SqliteJournalMode::Wal)
+        .busy_timeout(Duration::from_secs(5));
     let pool = SqlitePoolOptions::new()
         .connect_with(options)
         .await
@@ -36,11 +43,16 @@ pub async fn open_database(path: &Path) -> Result<SqlitePool, StartError> {
     Ok(pool)
 }
 
-/// Routes served to the device, behind mTLS at the edge.
-pub fn device_router(pool: SqlitePool) -> Router {
+/// Routes served to the device, behind mTLS at the edge. The edge forwards
+/// the client certificate fingerprint in `fingerprint_header` (ADR 0003).
+pub fn device_router(pool: SqlitePool, fingerprint_header: HeaderName) -> Router {
     Router::new()
         .route("/healthz", get(health))
-        .with_state(pool)
+        .route("/telemetry/{device}", post(telemetry::receive))
+        .with_state(DeviceState {
+            pool,
+            fingerprint_header,
+        })
 }
 
 /// Routes served to the panel, behind an interactive login at the edge.
@@ -83,6 +95,7 @@ pub struct Server {
     device: TcpListener,
     panel: TcpListener,
     pool: SqlitePool,
+    fingerprint_header: HeaderName,
 }
 
 impl Server {
@@ -97,6 +110,7 @@ impl Server {
             device,
             panel,
             pool,
+            fingerprint_header: config.fingerprint_header.clone(),
         })
     }
 
@@ -126,7 +140,7 @@ impl Server {
 
         let device = serve(
             self.device,
-            device_router(self.pool.clone()),
+            device_router(self.pool.clone(), self.fingerprint_header),
             stopped.clone(),
         );
         let panel = serve(self.panel, panel_router(self.pool.clone()), stopped);

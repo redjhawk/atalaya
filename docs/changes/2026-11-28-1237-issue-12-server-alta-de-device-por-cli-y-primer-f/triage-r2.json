@@ -1,0 +1,20 @@
+[
+  {
+    "id": "R2-01",
+    "blocking": true,
+    "reason": "Confirmed: `received_at` is taken at the start of `receive` (server/src/telemetry.rs:90), before the identity check, the body read and `BEGIN IMMEDIATE`, and `store` writes it with a plain `UPDATE devices SET last_contact = ?` (line 173). Two accepted requests from one device can commit out of order (a slow body or a lock wait under the 5 s busy timeout), which moves the last contact back to an older reception. That breaks FR-TELEMETRY-002 read with the glossary ('última vez visto': when the device was last heard from), and the fix is one line.",
+    "followup": "none",
+    "consequence": "",
+    "title": "",
+    "todo": "server/src/telemetry.rs:173: never move the last contact backwards, e.g. `UPDATE devices SET last_contact = MAX(COALESCE(last_contact, 0), ?) WHERE id = ?` (the COALESCE is needed because SQLite's multi-argument MAX returns NULL if any argument is NULL). Keep each fix's own `received_at`. Add a test that proves an older reception committed after a newer one leaves the newer last contact."
+  },
+  {
+    "id": "R2-02",
+    "blocking": false,
+    "reason": "The in-source `#[cfg(test)] mod tests` in server/src/telemetry.rs (lines 203-252) proves its case through the public router, but it breaks the README convention that tests live in server/tests/ with shared helpers, and it duplicates `common::fix_request`, `common::send` and `common::count_all_fixes`. This is a placement and duplication issue, not a defect.",
+    "followup": "note",
+    "consequence": "",
+    "title": "",
+    "todo": "server/src/telemetry.rs:203-252: move the non-UTF-8 `{device}` case to server/tests/telemetry.rs next to the other identity-failure cases. Use `common::fix_request(\"%FF\", fingerprint, VALID)`, `common::send` and `common::count_all_fixes`, split the `[None, Some(FP)]` loop into two tests, and delete the in-source module."
+  }
+]

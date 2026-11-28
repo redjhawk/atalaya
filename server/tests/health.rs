@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 use atalaya_server::{Config, Server, device_router, open_database, panel_router};
 use axum::Router;
 use axum::body::Body;
-use axum::http::{Request, StatusCode};
+use axum::http::{HeaderName, Request, StatusCode};
 use tempfile::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -19,6 +19,10 @@ fn config(dir: &TempDir) -> Config {
         _ => None,
     })
     .unwrap()
+}
+
+fn fingerprint_header() -> HeaderName {
+    HeaderName::from_static("x-client-cert-sha256")
 }
 
 async fn health_status(router: Router) -> StatusCode {
@@ -42,7 +46,7 @@ async fn both_routers_report_healthy_when_the_database_answers() {
     let pool = open_database(&dir.path().join("atalaya.db")).await.unwrap();
 
     assert_eq!(
-        health_status(device_router(pool.clone())).await,
+        health_status(device_router(pool.clone(), fingerprint_header())).await,
         StatusCode::OK
     );
     assert_eq!(health_status(panel_router(pool)).await, StatusCode::OK);
@@ -55,7 +59,7 @@ async fn health_fails_when_the_database_is_unavailable() {
     pool.close().await;
 
     assert_eq!(
-        health_status(device_router(pool.clone())).await,
+        health_status(device_router(pool.clone(), fingerprint_header())).await,
         StatusCode::SERVICE_UNAVAILABLE
     );
     assert_eq!(
@@ -75,7 +79,10 @@ async fn startup_creates_the_database_and_can_reopen_it() {
 
     // A second start finds the migrations already applied.
     let pool = open_database(&path).await.unwrap();
-    assert_eq!(health_status(device_router(pool)).await, StatusCode::OK);
+    assert_eq!(
+        health_status(device_router(pool, fingerprint_header())).await,
+        StatusCode::OK
+    );
 }
 
 #[tokio::test]
@@ -112,7 +119,10 @@ async fn unknown_paths_are_not_found() {
     let pool = open_database(&dir.path().join("atalaya.db")).await.unwrap();
     let request = Request::get("/").body(Body::empty()).unwrap();
 
-    let response = device_router(pool).oneshot(request).await.unwrap();
+    let response = device_router(pool, fingerprint_header())
+        .oneshot(request)
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }

@@ -21,6 +21,19 @@ evitar ambigüedad y verbosidad. Si un concepto no está aquí, se añade antes 
 - **track / traza**: secuencia ordenada de fixes que dibuja el recorrido.
 - **última vez visto**: `últimoContacto`, cuándo se supo por última vez del device.
 
+## Identidad y acceso
+- **operador** (*operator*): la persona que administra el server y despliega el device. Evitar
+  *admin*, *usuario*.
+- **huella** (*fingerprint*): SHA-256 del certificado de cliente del device, 64 caracteres hex en
+  minúsculas; identifica al device (ADR 0003). No es un secreto. Evitar *token*, *clave*, *hash*.
+- **alta** (*enrolment*): registro manual de un device en el server con id, nombre y huella, por línea
+  de comandos. Evitar *registro*, *signup*, *provisioning*.
+- **revocar** (*revoke*): dejar un device sin huella; sus peticiones se rechazan hasta asignarle otra.
+- **device API**: listener del server para el device, tras mTLS en el edge; el único donde se confía
+  en la cabecera de huella.
+- **panel**: listener del server para la interfaz web, tras login interactivo. Evitar *dashboard*,
+  *admin*.
+
 ## Protocolo
 - **comando** (*command*): orden del server al device (p. ej. `REQUEST_LOCATION`, `pm disable-user`).
 - **ack**: confirmación del device de que recibió o completó un comando.

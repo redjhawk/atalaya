@@ -1,19 +1,48 @@
 use std::process::ExitCode;
 
+use atalaya_server::cli::{self, Command, DeviceCommand};
 use atalaya_server::{Config, Server};
+
+/// Exit code of a call whose arguments are wrong: usage or input rules.
+const USAGE_ERROR: u8 = 2;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    match run().await {
+    let command = match cli::parse(std::env::args_os().skip(1)) {
+        Ok(command) => command,
+        Err(error) => {
+            report(&error);
+            return ExitCode::from(USAGE_ERROR);
+        }
+    };
+    let result = match command {
+        Command::Serve => serve().await,
+        Command::Device(command) => device(command).await,
+    };
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("atalaya-server: {error}");
+            report(&*error);
             ExitCode::FAILURE
         }
     }
 }
 
-async fn run() -> Result<(), Box<dyn std::error::Error>> {
+/// Writes every line of `error` to stderr with the program-name prefix.
+fn report(error: &dyn std::error::Error) {
+    for line in error.to_string().lines() {
+        eprintln!("atalaya-server: {line}");
+    }
+}
+
+async fn device(command: DeviceCommand) -> Result<(), Box<dyn std::error::Error>> {
+    let config = Config::from_env()?;
+    let line = cli::run(command, &config).await?;
+    println!("{line}");
+    Ok(())
+}
+
+async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
     let server = Server::bind(&config).await?;
     eprintln!(
