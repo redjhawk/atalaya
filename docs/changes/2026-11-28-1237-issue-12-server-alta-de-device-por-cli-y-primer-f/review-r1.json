@@ -1,0 +1,66 @@
+[
+  {
+    "file": "server/src/telemetry.rs",
+    "line": 81,
+    "category": "bug",
+    "body": "FR-TELEMETRY-003 says a request 'a un {device} que no existe' gets the one identical 401, and FR-TELEMETRY-004 says identity is checked before anything else. The technical spec (telemetry-intake, Data flow step 2) adds: 'The {device} path segment is not validated against the id rules: an id that cannot exist simply finds no row.' The handler takes `Path<String>`. Axum percent-decodes the segment and rejects one that is not valid UTF-8 before the handler runs. So `POST /telemetry/%FF`, with no fingerprint header or with any fingerprint, gets axum's `400` rejection instead of `401 unauthorized\\n`. That path is a device that cannot exist, and the response differs from the uniform identity failure. The impact is small (it leaks nothing about enrolled devices), but it breaks the 'five identical responses' rule for an unknown `{device}`. Suggested fix: take the raw segment without the failing extractor, e.g. `Result<Path<String>, PathRejection>` with a rejection mapped to `unauthorized()`, or read the device from `RawPathParams`. Then add a TC-033/TC-035-style case for a non-UTF-8 `{device}` that expects 401.",
+    "axis": "spec",
+    "id": "R1-01"
+  },
+  {
+    "file": "server/tests/routes.rs",
+    "line": 60,
+    "category": "simplify",
+    "body": "Duplicated code: both TC-025 tests list the same paths, methods, body and headers (lines 13-29 and 53-66). Extract one helper like `malformed_calls()` in enrolment_cli.rs.",
+    "axis": "standards",
+    "id": "R1-02"
+  },
+  {
+    "file": "server/src/devices.rs",
+    "line": 171,
+    "category": "simplify",
+    "body": "Speculative generality: the `is_unique_violation` branch handles a case its own comment says cannot happen under BEGIN IMMEDIATE, and adds a third query. Use `.execute(&mut *tx).await?;` or map it straight to one error.",
+    "axis": "standards",
+    "id": "R1-03"
+  },
+  {
+    "file": "server/src/devices.rs",
+    "line": 237,
+    "category": "readability",
+    "body": "Primitive obsession and duplication: `exists` takes raw SQL; `add` writes the id query twice; `set_fingerprint` repeats the fingerprint check inline. Replace with named `id_taken` / `fingerprint_taken` helpers.",
+    "axis": "standards",
+    "id": "R1-04"
+  },
+  {
+    "file": "server/src/telemetry.rs",
+    "line": 70,
+    "category": "readability",
+    "body": "Mysterious name: `Fix::validate() -> bool` only returns a yes/no. Rename it `is_within_bounds` or `is_valid`.",
+    "axis": "standards",
+    "id": "R1-05"
+  },
+  {
+    "file": "server/tests/health.rs",
+    "line": 24,
+    "category": "simplify",
+    "body": "`fingerprint_header()` repeats `common::default_header()`, against the README convention this diff adds (shared helpers in tests/common/mod.rs). Use `mod common;`.",
+    "axis": "standards",
+    "id": "R1-06"
+  },
+  {
+    "file": "server/tests/operator_flows.rs",
+    "line": 142,
+    "category": "test",
+    "body": "factory-testing-rules, one logical assertion per test: tc_040 also tests giving a revoked device a new fingerprint, which its name doesn't mention. Split lines 142-147 into their own test.",
+    "axis": "standards",
+    "id": "R1-07"
+  },
+  {
+    "file": "server/tests/telemetry.rs",
+    "line": 120,
+    "category": "nit",
+    "body": "A busy-wait spin on the clock; use `tokio::time::sleep(Duration::from_millis(5))` instead.",
+    "axis": "standards",
+    "id": "R1-08"
+  }
+]
