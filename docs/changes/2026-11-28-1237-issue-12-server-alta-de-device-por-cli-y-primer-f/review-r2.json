@@ -1,0 +1,18 @@
+[
+  {
+    "file": "server/src/telemetry.rs",
+    "line": 173,
+    "category": "bug",
+    "body": "FR-TELEMETRY-002 says an accepted request sets the last contact to the moment the server received it, and the glossary defines 'última vez visto' / last contact as when the device was last heard from. The handler takes `received_at = now_ms()` at line 90, before the identity check, the body read and `BEGIN IMMEDIATE`. The busy timeout lets a writer wait up to 5 s for the lock (another request, or a CLI subcommand holding the write lock). So two accepted requests from the same device can commit out of order: request A (received_at = T) waits on the lock, request B (received_at = T + 3 ms) commits first, then A runs `UPDATE devices SET last_contact = ? WHERE id = ?` and moves the last contact back to T. The device's last contact then no longer shows the latest reception, which breaks the meaning of the field the panel will rely on. TC-031 sends ten concurrent requests but checks only the count, so it cannot catch this. Suggested fix: never move it backwards, e.g. `UPDATE devices SET last_contact = MAX(COALESCE(last_contact, 0), ?) WHERE id = ?`. Note that SQLite's multi-argument MAX returns NULL if any argument is NULL, so the COALESCE is needed. Each fix keeps its own `received_at` unchanged.",
+    "axis": "spec",
+    "id": "R2-01"
+  },
+  {
+    "file": "server/src/telemetry.rs",
+    "line": 216,
+    "category": "test",
+    "body": "Standard: server/README.md, Tests: \"Tests exercise public behavior at the HTTP boundary ... Shared helpers are in `tests/common/mod.rs`\", and every other test of this diff lives in server/tests/. The round-1 fix puts the non-UTF-8 `{device}` case in a `#[cfg(test)] mod tests` inside server/src/telemetry.rs (lines 203-252). It also duplicates the shared helpers: its own `FP` and `VALID` constants, the request building, the oneshot-and-read-body code and a `SELECT COUNT(*) FROM fixes` query that already exist as `common::hex64`, `common::fix_request`, `common::send` and `common::count_all_fixes`. Nothing in the test needs crate-private access: it only calls the public `open_database` and `device_router`, and `/telemetry/%FF` is a valid URI for `Request::builder`. Suggested fix: move the case into server/tests/telemetry.rs next to the other identity-failure cases. Build the request with `common::fix_request(\"%FF\", fingerprint, VALID)`, check it with `common::send`, and confirm that nothing was stored with `count_all_fixes`. Then delete the in-source module. Splitting the `for fingerprint in [None, Some(FP)]` loop into two tests would also give one logical assertion per test (factory-testing-rules).",
+    "axis": "standards",
+    "id": "R2-02"
+  }
+]
