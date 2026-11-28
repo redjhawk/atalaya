@@ -1,0 +1,4 @@
+# factory:begin (managed by the agent factory installer; edit outside this block)
+.factory-repair/
+.factory-probe
+# factory:end

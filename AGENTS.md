@@ -51,3 +51,11 @@ Every PR must pass:
 - and component builds.
 
 Human re-entry is required for production device deployment, privileged Magisk changes, authentication, secret handling and SOS behavior.
+
+<!-- factory:begin (managed by the agent factory installer; edit outside this block) -->
+## Agent factory
+
+Feature work and behaviour changes go through the agent factory (`.factory/core/docs/WORKFLOW.md`): specification, use cases, test cases, technical specification, tests first (TDD), implementation, verification on the running system, independent two-axis review, triage and merge. Start it by labelling an issue with the factory label, or run `.factory/core/bin/factory run <issue>`. Prepare issues with the owner using the `/factory-request` skill.
+
+When you run as one of the factory's stage agents, the stage prompt is your task: do that stage only; the pipeline commits, pushes and opens pull requests. This project's own rules above and below this block, and its skills, keep applying to the code you write.
+<!-- factory:end -->

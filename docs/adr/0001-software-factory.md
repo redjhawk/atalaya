@@ -8,7 +8,7 @@ Accepted
 
 ## Decision
 
-Atalaya uses one GitHub monorepo for the locator, agent and server. GitHub Issues is the ticket tracker, GitHub Actions is the orchestrator, and GitHub is the git host. Reusable agent discipline comes from the Matt Pocock skills installed under `.agents/skills/`.
+Atalaya uses one GitHub monorepo for the locator, agent and server. GitHub Issues is the ticket tracker, GitHub Actions is the orchestrator, and GitHub is the git host. Reusable agent discipline comes from the Matt Pocock skills installed under `.agents/skills/`. Issue-to-pull-request automation is the agent factory installed under `.factory/`; its tasks are described in `docs/agents/factory-tasks.md`.
 
 ## Runner topology
 

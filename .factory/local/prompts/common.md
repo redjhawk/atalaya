@@ -1,0 +1,7 @@
+- Read `SCOPE.md` before anything else. It is the project boundary: a request that crosses it is not built. Say so in your output and stop.
+- Use the vocabulary of `docs/GLOSSARY.md`. Issues and specifications are written in Spanish; code, tests, comments and commit messages are in English.
+- Respect the accepted decisions in `docs/adr/`. ADR 0003 fixes how a device is identified: by the client certificate fingerprint that the edge forwards in a request header, trusted only on the device listener. There is no bearer token.
+- The server has two listeners, the device API (port 8080) and the panel (port 8081). A device route never exists on the panel listener, and a panel route never exists on the device listener.
+- Never write credentials, hostnames, certificate fingerprints or real location data. Use obviously fake example values.
+- Run cargo with `--manifest-path server/Cargo.toml`; do not change directory. Crates are already downloaded: pass `--offline`.
+- A change that needs a new dependency cannot be finished by an agent: `Cargo.toml` belongs to a human. Report it as blocked and name the crate and the reason.

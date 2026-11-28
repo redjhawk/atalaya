@@ -1,0 +1,3 @@
+- Put every test in `server/tests/`, as an integration test that sends a request to a router and checks the response or what a later request returns. Follow `server/tests/health.rs`. Do not add `#[cfg(test)]` modules inside `server/src/`: they cannot be locked.
+- A test that concerns device identity includes the three rejections: no fingerprint header, an unknown fingerprint, and the fingerprint of another device.
+- Control time through the code under test; never sleep to wait for real time.
