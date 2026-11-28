@@ -137,3 +137,59 @@ autenticación.
 
 Al terminar, borrar el hostname de prueba y sus reglas, o renombrarlos al hostname definitivo de la
 API. Borrar `prueba.pem` y `prueba.key`.
+
+## 2. Poner en marcha la fábrica de agentes
+
+La fábrica (`.factory/`, referencia en `.factory/core/docs/WORKFLOW.md`) necesita dos secretos del
+repositorio y un interruptor. Los secretos solo los puede crear el propietario.
+
+### 2.1 Secreto `CLAUDE_CODE_OAUTH_TOKEN`
+
+```sh
+claude setup-token
+gh secret set CLAUDE_CODE_OAUTH_TOKEN
+```
+
+### 2.2 Secreto `FACTORY_TOKEN`
+
+Es un token personal del propietario. La fábrica lo usa para subir ramas, comentar, abrir y fusionar
+PR; los agentes nunca lo ven.
+
+1. En GitHub: Settings → Developer settings → Personal access tokens → Fine-grained tokens →
+   *Generate new token*.
+2. *Repository access*: *Only select repositories*, solo este repositorio.
+3. *Repository permissions*, en lectura y escritura: **Contents**, **Issues**, **Pull requests** y
+   **Actions**. Los tres primeros los pide la fábrica; *Actions* lo usan el supervisor y la
+   reparación para leer los runs y relanzarse.
+4. Copiar el valor, que solo se muestra una vez, y guardarlo:
+
+   ```sh
+   gh secret set FACTORY_TOKEN
+   ```
+
+El token caduca en la fecha elegida al crearlo. Cuando caduque, la fábrica deja de funcionar hasta
+renovarlo y volver a guardar el secreto.
+
+### 2.3 Encender y apagar el supervisor
+
+El supervisor lanza la siguiente issue de la cola y reanuda los runs interrumpidos. Está apagado
+solo cuando la variable del repositorio `FACTORY_SUPERVISOR` vale exactamente `off`; con cualquier
+otro valor, o sin la variable, está encendido.
+
+```sh
+gh variable set FACTORY_SUPERVISOR --body off   # apagar
+gh variable delete FACTORY_SUPERVISOR           # encender
+gh workflow run factory-supervisor.yml          # lanzarlo ya, sin esperar los 15 minutos
+```
+
+Otros frenos:
+
+- `gh variable set FACTORY_MAX_ACTIVE --body 0`: no lanza issues nuevas, pero sigue reanudando las
+  que ya están en curso.
+- Etiqueta `factory-hold` en una issue: el supervisor no la coge. Debe llevarla toda issue que sea
+  una spec con sub-issues, que necesite a una persona o que no esté lista.
+
+### 2.4 Lanzar una issue a mano
+
+Poner la etiqueta `ai-dev` a una issue escrita por el propietario. Un comentario del propietario en
+esa issue reanuda un run que se paró a preguntar.
