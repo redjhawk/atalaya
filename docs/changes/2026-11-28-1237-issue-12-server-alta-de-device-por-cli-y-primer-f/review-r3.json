@@ -1,0 +1,18 @@
+[
+  {
+    "file": "server/src/telemetry.rs",
+    "line": 176,
+    "category": "test",
+    "body": "Requirement: FR-TELEMETRY-002 ('Una petición aceptada fija el último contacto del device en el momento en que el server la recibió'), read with the glossary ('última vez visto': cuándo se supo por última vez del device), and TS-TELEMETRY-007 as amended in round 2: '`devices.last_contact` takes it only when it is later than the stored value'. Round 2 fixed R2-01 by changing the update to `MAX(COALESCE(last_contact, 0), ?)`, but no test was added. The R2-01 triage todo asked for one: 'Add a test that proves an older reception committed after a newer one leaves the newer last contact.' The existing tests (TC-027, TC-030, TC-038) only send receptions in increasing order, and TC-031 checks only the fix count. So the never-move-backwards behaviour is unproven: going back to the round-1 `UPDATE devices SET last_contact = ? WHERE id = ?` would still pass the whole suite. Suggested fix: the files in server/tests are locked, so add an in-source test next to the existing `#[cfg(test)] mod tests` in this file. The test enrols a device directly in the pool with `last_contact` set to a far-future value (e.g. `i64::MAX - 1` or `now + 1 day`), sends one accepted fix through `device_router`, and asserts `201`, one stored fix whose `received_at` is the real reception time, and `last_contact` unchanged at the future value. A second assertion should check that a NULL `last_contact` becomes the reception time, which guards the `COALESCE`.",
+    "axis": "spec",
+    "id": "R3-01"
+  },
+  {
+    "file": "server/src/telemetry.rs",
+    "line": 176,
+    "category": "test",
+    "body": "Rule: AGENTS.md, Delivery rule 3 ('Test the component through public behavior before implementation details'), and `.agents/skills/tdd/SKILL.md` (test-first: every behaviour change starts from a failing test). Round 2 changes behaviour here: the last contact now only moves forward (`UPDATE devices SET last_contact = MAX(COALESCE(last_contact, 0), ?) WHERE id = ?`). The R2-01 triage todo asked for a test of that. The round-2 commit (af806ab) touches only this line and the technical spec. No test in server/tests/ fails if the line goes back to `SET last_contact = ?`: TC-030 sends two fixes in clock order, and TC-031 checks only the count. Suggested fix: add a case to server/tests/telemetry.rs that arranges a last contact newer than the next reception, then posts an accepted fix through `post_fix` and expects the last contact to stay at the newer value while the fix is still stored. The server clock has no seam, so the arrangement can write a far-future `last_contact` (e.g. `i64::MAX / 2`) through `db.pool`, with a comment like the one in TC-030. The test still reads the outcome through the existing `db.last_contact` helper and asserts against that literal value.",
+    "axis": "standards",
+    "id": "R3-02"
+  }
+]
